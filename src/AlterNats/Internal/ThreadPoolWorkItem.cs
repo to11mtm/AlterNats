@@ -11,7 +11,8 @@ internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem
     ThreadPoolWorkItem<T>? nextNode;
     public ref ThreadPoolWorkItem<T>? NextNode => ref nextNode;
 
-    Action<T?>? continuation;
+    Action<NatsKey,T?>? continuation;
+    NatsKey subject;
     T? value;
     ILoggerFactory? loggerFactory;
 
@@ -20,7 +21,7 @@ internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ThreadPoolWorkItem<T> Create(Action<T?> continuation, T? value, ILoggerFactory loggerFactory)
+    public static ThreadPoolWorkItem<T> Create(Action<NatsKey,T?> continuation, NatsKey subject, T? value, ILoggerFactory loggerFactory)
     {
         if (!pool.TryDequeue(out var item))
         {
@@ -28,6 +29,7 @@ internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem
         }
 
         item.continuation = continuation;
+        item.subject = subject;
         item.value = value;
         item.loggerFactory = loggerFactory;
 
@@ -38,10 +40,12 @@ internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem
     public void Execute()
     {
         var call = continuation;
+        var s = subject;
         var v = value;
         var factory = loggerFactory;
         continuation = null;
         value = default;
+        subject = default;
         loggerFactory = null;
         if (call != null)
         {
@@ -49,7 +53,7 @@ internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem
 
             try
             {
-                call.Invoke(v);
+                call.Invoke(s,v);
             }
             catch (Exception ex)
             {
